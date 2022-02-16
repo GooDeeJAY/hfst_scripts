@@ -1,3 +1,5 @@
+import math
+
 sep = ","
 layout = [
     sep.join(" q w e r t y u i o p ").split(sep),
@@ -39,7 +41,7 @@ def find_neighbors_of(letter):
     return m
 
 def give_weights(neighbors):
-    w = {}
+    weights = {}
 
     for r in range(3):
         if any(neighbors[r]):
@@ -48,27 +50,38 @@ def give_weights(neighbors):
             if r == 1: # middle
                 for c in [0, 4]:
                     if row[c]:
-                        w[row[c]] = 0.1
+                        weights[row[c]] = 0.1
 
             else: # top and bottom
                 for c in range(5):
                     dist = 0.05/(abs(2-c)+1)
                     if row[c]:
-                        w[row[c]] = round(dist, 3)
-    w.pop(' ')
-    return w
+                        weights[row[c]] = round(dist, 3)
+    weights.pop(' ')
+    return weights
+
+def logprob_weights(weights):
+    for k in weights:
+        weights[k] = round(-math.log(weights[k], 10), 3)
+    return weights
+
 
 def generate_rule(letter, weights):
     upper = "Sq" if letter == "'" else letter.upper()
+
     wkeys = sort_keys_by_val(weights)
+    length = len(wkeys)
 
-    rule = [f"define Noise{upper} [ {letter} (->) {wkeys[0]}::{weights[wkeys[0]]} ] .o."]
-    indent = ' ' * len(rule[0].split("[")[0])
+    define = f"define Noise{upper} "
+    indent = ' ' * len(define)
+    rule = []
 
-    for w in wkeys[1:]:
-        rule.append(f"{indent}[ {letter} (->) {w}::{weights[w]} ] .o.")
+    for i in range(length):
+        starter = indent if i else define
+        ender = ".o." if i < length-1 else ";"
+
+        rule.append(f"{starter}[ {letter} (->) {wkeys[i]}::{weights[wkeys[i]]} ] {ender}")
     
-    rule[-1] = ";".join(rule[-1].rsplit(".o.", 1))
     return '\n'.join(rule)
 
 def generate_xfst(rules):
@@ -106,6 +119,7 @@ if __name__ == '__main__':
     for letter in letters:
         neighbors = find_neighbors_of(letter)
         weights = give_weights(neighbors)
+        weights = logprob_weights(weights)
         rules.append(generate_rule(letter, weights))
     
     with open(filename, mode="w", encoding="utf-8") as f:
